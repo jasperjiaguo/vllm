@@ -64,6 +64,15 @@ class OAIAttention(nn.Module):
         prefix: str = "",
     ):
         super().__init__()
+        # Support grafted MXFP4 MoE + FP8 attention models
+        attn_qc = getattr(config, "attn_quantization_config", None)
+        if attn_qc is not None:
+            from vllm.model_executor.layers.quantization.fp8 import Fp8Config
+
+            quant_config = Fp8Config(
+                is_checkpoint_fp8_serialized=True,
+                activation_scheme=attn_qc.get("activation_scheme", "static"),
+            )
         self.layer_idx = extract_layer_index(prefix)
         self.head_dim = config.head_dim
         self.num_attention_heads = config.num_attention_heads
@@ -500,6 +509,8 @@ class GptOssModel(nn.Module):
                 if weight_name not in name:
                     continue
                 name = name.replace(weight_name, param_name)
+                if name not in params_dict:
+                    break
                 param = params_dict[name]
                 weight_loader = getattr(param, "weight_loader", default_weight_loader)
                 if weight_loader == default_weight_loader:
@@ -1056,6 +1067,8 @@ class GptOssModel(nn.Module):
                 if weight_name not in name:
                     continue
                 name = name.replace(weight_name, param_name)
+                if name not in params_dict:
+                    break
                 param = params_dict[name]
                 weight_loader = getattr(param, "weight_loader", default_weight_loader)
                 if weight_loader == default_weight_loader:
